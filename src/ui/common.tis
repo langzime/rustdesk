@@ -7,6 +7,8 @@ var is_osx = OS == "OSX";
 var is_win = OS == "Windows";
 var is_linux = OS == "Linux";
 var is_file_transfer;
+var is_xfce = false;
+try { is_xfce = handler.is_xfce(); } catch(e) {}
 
 function hashCode(str) {
   var hash = 160 << 16 + 114 << 8 + 91; 
@@ -17,7 +19,7 @@ function hashCode(str) {
 }
 
 function intToRGB(i, a = 1) {
-  return 'rgba(' + ((i >> 16) & 0xFF) + ', ' + ((i >> 8) & 0xFF)
+  return 'rgba(' + ((i >> 16) & 0xFF) + ', ' + ((i >> 8) & 0x7F)
     + ',' + (i & 0xFF) + ',' + a + ')';
 }
 
@@ -205,7 +207,7 @@ function getMsgboxParams() {
     return msgbox_params; 
 }
 
-function msgbox(type, title, text, callback, height, width) {
+function msgbox(type, title, text, callback, height, width, retry=0) {
     var has_msgbox = msgbox_params != null;
     if (!has_msgbox && !type) return;
     var remember = false;
@@ -215,14 +217,14 @@ function msgbox(type, title, text, callback, height, width) {
     msgbox_params =  {
         remember: remember, type: type, text: text, title: title,
         getParams: getMsgboxParams,
-        callback: callback
+        callback: callback, retry: retry,
     };
     if (has_msgbox) return;
     var dialog = {
         client: true,
         parameters: msgbox_params,
-        width: width,
-        height: height,
+        width: width + (is_xfce ? 50 : 0),
+        height: height + (is_xfce ? 50 : 0),
     };
     var html = handler.get_msgbox();
     if (html) dialog.html = html;
@@ -249,10 +251,20 @@ function connecting() {
     handler.msgbox("connecting", "Connecting...", "Connection in progress. Please wait.");
 }
 
-handler.msgbox = function(type, title, text, callback=null, height=180, width=500) {
+handler.msgbox = function(type, title, text, callback=null, height=180, width=500, retry=0) {
     // directly call view.Dialog from native may crash, add timer here, seem safe
     // too short time, msgbox won't get focus, per my test, 150 is almost minimun
-    self.timer(150ms, function() { msgbox(type, title, text, callback, height, width); });
+    self.timer(150ms, function() { msgbox(type, title, text, callback, height, width, retry); });
+}
+
+var reconnectTimeout = 1;
+handler.msgbox_retry = function(type, title, text, hasRetry, callback=null, height=180, width=500) {
+    handler.msgbox(type, title, text, callback, height, width, hasRetry ? reconnectTimeout : 0);
+    if (hasRetry) {
+        reconnectTimeout *= 2;
+    } else {
+        reconnectTimeout = 1;
+    }
 }
 /******************** end of msgbox ****************************************/
 
